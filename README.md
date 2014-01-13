@@ -1,4 +1,4 @@
 ynweb
 =====
 
-Web I/O module for Python
+Web I/O and DB module for Python
