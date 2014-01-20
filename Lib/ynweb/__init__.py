@@ -4,7 +4,7 @@ import cgi, os, re
 
 
 
-class YNWeb:
+class YNWeb(object):
 	def __init__(self, environ, start_response, db_user = None, db_password = None, db_name = None, db_host = None):
 		self.environ = environ
 		self.start_response = start_response
@@ -171,19 +171,32 @@ class YNWeb:
 			return UploadFile(self.form[key].filename, self.form[key].file.read())
 
 	# OUTPUT
-	def content(self, responseCode, contentType, content):
+	def content(self, responseCode, contentType, content, contentDisposition = None):
 
 		content = self.smartString(content)
 
 		if self.sessionaltered:
 			self.session.save()
 
-		self.start_response(responseCode,
-			[('Content-type', contentType),
-			('Content-Length', self.smartString(len(content)))]
-			)
+		responseList = [
+			('Content-type', contentType),
+			('Content-Length', self.smartString(len(content))),
+			]
+		if contentDisposition:
+			responseList.append(('Content-Disposition', contentDisposition))
+		
+		
+		self.start_response(responseCode, responseList)
 		return content
-	
+
+
+	def response(self, content, contentType = 'text/plain', responseCode = '200', contentDisposition = None):
+		return Response(self, content, contentType, responseCode, contentDisposition)
+
+	def saveSession(self):
+		if self.sessionaltered:
+			self.session.save()
+
 	# SESSION
 	def getSession(self, key):
 		if self.session.has_key(key):
@@ -249,13 +262,48 @@ class YNWeb:
 							self.inputOK = False
 
 
-		
+class Response(object):
+	
+	responses = {
+		'200': 'OK',
+		'404': 'Not Found',
+	}
+	
+	def __init__(self, parent, content, contentType = 'text/plain', responseCode = '200', contentDisposition = None):
+		self.parent = parent
+		self.responseCode = str(responseCode)
+		self.content = content
+		self.contentType = contentType
+		self.contentDisposition = contentDisposition
 
-class UploadFile:
+	def respond(self, start_response):
+		self.start_response = start_response
+		
+		self.parent.saveSession()
+
+		responseList = [
+			('Content-type', self.contentType),
+			('Content-Length', str(len(self.content))),
+			]
+			
+		if self.responseCode in self.responses:
+			response = "%s %s" % (self.responseCode, self.responses[self.responseCode])
+		else:
+			response = str(self.responseCode)
+		
+		if self.contentDisposition:
+			responseList.append(('Content-Disposition', self.contentDisposition))
+		
+		# Send response
+		self.start_response(response, responseList)
+		return self.parent.smartString(self.content)
+
+
+class UploadFile(object):
 	def __init__(self, filename, content):
 		self.filename = filename
 		self.content = content
-		self.ending = self.filename.split('.')[-1].lower()
+		self.ending = self.filename.lower().split('.')[-1]
 
 	def save(self, folder, filename = None):
 		if self.content:
