@@ -117,13 +117,13 @@ class YNWeb(object):
 			# SVG support
 		
 			# http://de.wikipedia.org/wiki/Scalable_Vector_Graphics
-			if self.browser == 'Opera' and self.browserversion >= 11.01:
+			if self.browser == 'Opera' and self.browserversion >= 9.0:
 				self.supportsSVG = True
-			elif (self.browser == 'Safari' or self.browser == 'MobileSafari') and self.browserversion >= 5.0:
+			elif (self.browser == 'Safari' or self.browser == 'MobileSafari') and self.browserversion >= 3.2:
 				self.supportsSVG = True
-			elif self.browser == 'Chrome' and self.browserversion >= 10.0:
+			elif self.browser == 'Chrome' and self.browserversion >= 4.0:
 				self.supportsSVG = True
-			elif self.browser == 'Firefox' and self.browserversion >= 4.0:
+			elif self.browser == 'Firefox' and self.browserversion >= 3.0:
 				self.supportsSVG = True
 			elif self.browser == 'InternetExplorer' and self.browserversion >= 9.0:
 				self.supportsSVG = True
