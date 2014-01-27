@@ -21,8 +21,9 @@ class YNWeb(object):
 			reload(db)
 			self.db = db.MySQL(self.db_user, self.db_password, self.db_name, self.db_host)
 		
-
+		
 		# PROCESS FORM INPUT
+		self.form = None
 		if self.environ['REQUEST_METHOD'] == 'POST':
 			self.form = cgi.FieldStorage(fp=self.environ['wsgi.input'], environ=self.environ) 
 		elif self.environ['REQUEST_METHOD'] == 'GET':
@@ -161,10 +162,9 @@ class YNWeb(object):
 		
 	# INPUT
 	def input(self, key):
-		if self.form.has_key(key):
-			return self.smartString(self.form.getfirst(key))
-		else:
-			return ''
+		if self.form:
+			if self.form.has_key(key):
+				return self.smartString(self.form.getfirst(key))
 
 	def file(self, key):
 		if self.form.has_key(key):
@@ -222,11 +222,11 @@ class YNWeb(object):
 			"'",
 			":",
 			";",
-			"/",
+#			"/",
 			"\\",
 			"!",
 			"\"",
-			"#",
+#			"#",
 			"?",
 #			"=",
 	#		"@",
