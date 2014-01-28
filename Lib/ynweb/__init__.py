@@ -246,11 +246,12 @@ class YNWeb(object):
 		)
 		faulty = []
 		for key in fields.keys():
-			for trigger in triggers:
-				if trigger in self.input(key).lower() or singleHex(trigger) and (singleHex(trigger) in self.input(key).lower()):
-					if not key in self.faulty:
-						self.faulty.append(key)
-						self.inputOK = False
+			if self.input(key):
+				for trigger in triggers:
+					if trigger in self.input(key).lower() or singleHex(trigger) and (singleHex(trigger) in self.input(key).lower()):
+						if not key in self.faulty:
+							self.faulty.append(key)
+							self.inputOK = False
 
 		# REQUIRED
 		self.requiredmissing = []
