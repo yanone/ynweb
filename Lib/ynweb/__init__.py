@@ -8,7 +8,10 @@ class YNWeb(object):
 	def __init__(self, environ, start_response, db_user = None, db_password = None, db_name = None, db_host = None):
 		self.environ = environ
 		self.start_response = start_response
-		self.session = self.environ['beaker.session']
+		if self.environ.has_key('beaker.session'):
+			self.session = self.environ['beaker.session']
+		else:
+			self.session = None
 		self.sessionaltered = False
 		
 		self.db = None
