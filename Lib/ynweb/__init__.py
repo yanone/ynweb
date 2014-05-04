@@ -8,10 +8,7 @@ class YNWeb(object):
 	def __init__(self, environ, start_response, db_user = None, db_password = None, db_name = None, db_host = None):
 		self.environ = environ
 		self.start_response = start_response
-		if self.environ.has_key('beaker.session'):
-			self.session = self.environ['beaker.session']
-		else:
-			self.session = None
+		self.session = self.environ['beaker.session']
 		self.sessionaltered = False
 		
 		self.db = None
@@ -24,9 +21,8 @@ class YNWeb(object):
 			reload(db)
 			self.db = db.MySQL(self.db_user, self.db_password, self.db_name, self.db_host)
 		
-		
+
 		# PROCESS FORM INPUT
-		self.form = None
 		if self.environ['REQUEST_METHOD'] == 'POST':
 			self.form = cgi.FieldStorage(fp=self.environ['wsgi.input'], environ=self.environ) 
 		elif self.environ['REQUEST_METHOD'] == 'GET':
@@ -121,13 +117,13 @@ class YNWeb(object):
 			# SVG support
 		
 			# http://de.wikipedia.org/wiki/Scalable_Vector_Graphics
-			if self.browser == 'Opera' and self.browserversion >= 9.0:
+			if self.browser == 'Opera' and self.browserversion >= 11.01:
 				self.supportsSVG = True
-			elif (self.browser == 'Safari' or self.browser == 'MobileSafari') and self.browserversion >= 3.2:
+			elif (self.browser == 'Safari' or self.browser == 'MobileSafari') and self.browserversion >= 5.0:
 				self.supportsSVG = True
-			elif self.browser == 'Chrome' and self.browserversion >= 4.0:
+			elif self.browser == 'Chrome' and self.browserversion >= 10.0:
 				self.supportsSVG = True
-			elif self.browser == 'Firefox' and self.browserversion >= 3.0:
+			elif self.browser == 'Firefox' and self.browserversion >= 4.0:
 				self.supportsSVG = True
 			elif self.browser == 'InternetExplorer' and self.browserversion >= 9.0:
 				self.supportsSVG = True
@@ -165,33 +161,14 @@ class YNWeb(object):
 		
 	# INPUT
 	def input(self, key):
-		if self.form:
-			if self.form.has_key(key):
-				return self.smartString(self.form.getfirst(key))
+		if self.form.has_key(key):
+			return self.smartString(self.form.getfirst(key))
+		else:
+			return ''
 
 	def file(self, key):
 		if self.form.has_key(key):
 			return UploadFile(self.form[key].filename, self.form[key].file.read())
-
-	# OUTPUT
-	def content(self, responseCode, contentType, content, contentDisposition = None):
-
-		content = self.smartString(content)
-
-		if self.sessionaltered:
-			self.session.save()
-
-		responseList = [
-			('Content-type', contentType),
-			('Content-Length', self.smartString(len(content))),
-			]
-		if contentDisposition:
-			responseList.append(('Content-Disposition', contentDisposition))
-		
-		
-		self.start_response(responseCode, responseList)
-		return content
-
 
 	def response(self, content, contentType = 'text/plain', responseCode = '200', contentDisposition = None):
 		return Response(self, content, contentType, responseCode, contentDisposition)
@@ -222,39 +199,38 @@ class YNWeb(object):
 				return ''
 
 		triggers = (
-#			"'",
-#			":",
-#			";",
-#			"/",
-#			"\\",
-#			"!",
-#			"\"",
-#			"#",
-#			"?",
+			"'",
+			":",
+			";",
+			"/",
+			"\\",
+			"!",
+			"\"",
+			"#",
+			"?",
 #			"=",
-#			"@",
-#			"%",
-#			"<",
-#			">",
-#			"$",
-#			"&",
-#			"[",
-#			"]",
-#			"~",
-#			"^",
-#			"`",
-#			"{",
-#			"}",
-#			"|",
+	#		"@",
+			"%",
+			"<",
+			">",
+			"$",
+	#		"&",
+			"[",
+			"]",
+			"~",
+			"^",
+			"`",
+			"{",
+			"}",
+			"|",
 		)
 		faulty = []
 		for key in fields.keys():
-			if self.input(key):
-				for trigger in triggers:
-					if trigger in self.input(key).lower() or singleHex(trigger) and (singleHex(trigger) in self.input(key).lower()):
-						if not key in self.faulty:
-							self.faulty.append(key)
-							self.inputOK = False
+			for trigger in triggers:
+				if trigger in self.input(key).lower() or singleHex(trigger) and (singleHex(trigger) in self.input(key).lower()):
+					if not key in self.faulty:
+						self.faulty.append(key)
+						self.inputOK = False
 
 		# REQUIRED
 		self.requiredmissing = []
@@ -276,12 +252,11 @@ class Response(object):
 	def __init__(self, parent, content, contentType = 'text/plain', responseCode = '200', contentDisposition = None):
 		self.parent = parent
 		self.responseCode = str(responseCode)
-		self.content = content
+		self.content = self.parent.smartString(content)
 		self.contentType = contentType
 		self.contentDisposition = contentDisposition
 
-	def respond(self, start_response):
-		self.start_response = start_response
+	def respond(self):
 		
 		self.parent.saveSession()
 
@@ -299,8 +274,8 @@ class Response(object):
 			responseList.append(('Content-Disposition', self.contentDisposition))
 		
 		# Send response
-		self.start_response(response, responseList)
-		return self.parent.smartString(self.content)
+		self.parent.start_response(response, responseList)
+		return self.content
 
 
 class UploadFile(object):
