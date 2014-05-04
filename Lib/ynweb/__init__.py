@@ -8,7 +8,10 @@ class YNWeb(object):
 	def __init__(self, environ, start_response, db_user = None, db_password = None, db_name = None, db_host = None):
 		self.environ = environ
 		self.start_response = start_response
-		self.session = self.environ['beaker.session']
+		try:
+			self.session = self.environ['beaker.session']
+		except:
+			self.session = None
 		self.sessionaltered = False
 		
 		self.db = None
@@ -174,17 +177,20 @@ class YNWeb(object):
 		return Response(self, content, contentType, responseCode, contentDisposition)
 
 	def saveSession(self):
-		if self.sessionaltered:
-			self.session.save()
+		if self.session:
+			if self.sessionaltered:
+				self.session.save()
 
 	# SESSION
 	def getSession(self, key):
-		if self.session.has_key(key):
-			return self.session[key]
+		if self.session:
+			if self.session.has_key(key):
+				return self.session[key]
 
 	def setSession(self, key, value):
-		self.session[key] = value
-		self.sessionaltered = True
+		if self.session:
+			self.session[key] = value
+			self.sessionaltered = True
 
 
 	def processInput(self, fields, requiredfields):
