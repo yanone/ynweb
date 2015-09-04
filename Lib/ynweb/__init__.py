@@ -23,7 +23,8 @@ class YNWeb(object):
 			import db
 			reload(db)
 			self.db = db.MySQL(self.db_user, self.db_password, self.db_name, self.db_host)
-		
+		self.inputFields = {}
+
 
 		# PROCESS FORM INPUT
 		if self.environ['REQUEST_METHOD'] == 'POST':
@@ -164,17 +165,48 @@ class YNWeb(object):
 		
 	# INPUT
 	def input(self, key):
-		if self.form.has_key(key):
-			return self.smartString(self.form.getfirst(key))
+		import urllib
+		
+		if hasattr(self, 'form') and self.form.has_key(key):
+			
+			if self.inputFields.has_key(key):
+				if self.inputFields[key] == bool:
+					value = self.form.getfirst(key)
+				
+					if value == 'True' or value == 'true' or value == '1' or value == 'on':
+						return True
+					elif value == 'False' or value == 'false' or value == '0' or value == '':
+						return False
+				
+				elif self.inputFields[key] == int:
+					return int(self.form.getfirst(key))
+
+				elif self.inputFields[key] == unicode:
+					return self.smartString(urllib.unquote(self.form.getfirst(key).decode('utf8')))
+
+				elif self.inputFields[key] == str:
+					return self.smartString(urllib.unquote(self.form.getfirst(key)))
+
+				elif self.inputFields[key] == 'file':
+					return self.form.getfirst(key)
+
+				else:
+					return urllib.unquote(self.form.getfirst(key))
+			else:
+				return urllib.unquote(self.form.getfirst(key))
 		else:
 			return ''
+			#urllib.unquote(url).decode('utf8')
 
 	def file(self, key):
 		if self.form.has_key(key):
 			return UploadFile(self.form[key].filename, self.form[key].file.read())
 
-	def response(self, content, contentType = 'text/plain', responseCode = '200', contentDisposition = None):
-		return Response(self, content, contentType, responseCode, contentDisposition)
+	def response(self, content, contentType = 'text/plain', responseCode = '200', header = None):
+		return Response(self, content, contentType, responseCode, header)
+
+	def redirect(self, url):
+		return Response(self, responseCode = '301', header = ('Location', url))
 
 	def saveSession(self):
 		if self.session:
@@ -195,6 +227,7 @@ class YNWeb(object):
 
 	def processInput(self, fields, requiredfields):
 		self.inputOK = True
+		self.inputFields = {}
 
 		# FAULTY CHARACTERS
 		self.faulty = []
@@ -204,39 +237,58 @@ class YNWeb(object):
 			else:
 				return ''
 
-		triggers = (
-			"'",
-			":",
-			";",
-			"/",
-			"\\",
-			"!",
-			"\"",
-			"#",
-			"?",
-#			"=",
-	#		"@",
-			"%",
-			"<",
-			">",
-			"$",
-	#		"&",
-			"[",
-			"]",
-			"~",
-			"^",
-			"`",
-			"{",
-			"}",
-			"|",
-		)
 		faulty = []
 		for key in fields.keys():
-			for trigger in triggers:
-				if trigger in self.input(key).lower() or singleHex(trigger) and (singleHex(trigger) in self.input(key).lower()):
-					if not key in self.faulty:
-						self.faulty.append(key)
-						self.inputOK = False
+			
+#			if fields[key] == str or fields[key] == unicode:
+#				for trigger in triggers:
+#					if trigger in self.input(key).lower() or singleHex(trigger) and (singleHex(trigger) in self.input(key).lower()):
+#						if not key in self.faulty:
+#							self.faulty.append(key)
+#							self.inputOK = False
+
+#			if self.input(key) and fields[key] == str:
+#				try:
+#					_a = str(self.input(key))
+#				except:
+#					self.faulty.append(key)
+#					self.inputOK = False
+
+#			elif self.input(key) and fields[key] == unicode:
+#				try:
+#					_a = unicode(self.input(key))
+#				except:
+#					self.faulty.append(key)
+#					self.inputOK = False
+
+
+			try:
+#				exec('_a = %s(self.input(key))' % (fields[key]))
+				_a = fields[key](self.input(key))
+			except:
+				self.faulty.append(key)
+				self.inputOK = False
+			
+			
+#			if self.input(key) and fields[key] == int:
+#				try:
+#					_a = int(self.input(key))
+#				except:
+#					self.faulty.append(key)
+#					self.inputOK = False
+#
+#			elif self.input(key) and fields[key] == float:
+#				try:
+#					_a = float(self.input(key))
+#				except:
+#					self.faulty.append(key)
+#					self.inputOK = False
+
+		# Process
+#		for key in fields.keys():
+#			if fields[key] == bool:
+#				self.input(key)
+
 
 		# REQUIRED
 		self.requiredmissing = []
@@ -246,38 +298,41 @@ class YNWeb(object):
 						if not key in self.requiredmissing:
 							self.requiredmissing.append(key)
 							self.inputOK = False
+		
+		self.inputFields = fields
 
 
 class Response(object):
 	
 	responses = {
 		'200': 'OK',
+		'301': 'Redirect',
 		'404': 'Not Found',
 	}
 	
-	def __init__(self, parent, content, contentType = 'text/plain', responseCode = '200', contentDisposition = None):
+	def __init__(self, parent, content = '', contentType = 'text/plain', responseCode = '200', header = None):
 		self.parent = parent
 		self.responseCode = str(responseCode)
 		self.content = self.parent.smartString(content)
 		self.contentType = contentType
-		self.contentDisposition = contentDisposition
+		self.header = header
 
 	def respond(self):
 		
 		self.parent.saveSession()
 
-		responseList = [
-			('Content-type', self.contentType),
-			('Content-Length', str(len(self.content))),
-			]
-			
+		responseList = []
+		if self.content:
+			responseList.append(('Content-type', self.contentType))
+			responseList.append(('Content-Length', str(len(self.content))))
+
 		if self.responseCode in self.responses:
 			response = "%s %s" % (self.responseCode, self.responses[self.responseCode])
 		else:
 			response = str(self.responseCode)
-		
-		if self.contentDisposition:
-			responseList.append(('Content-Disposition', self.contentDisposition))
+	
+		if self.header:
+			responseList.append(self.header)
 		
 		# Send response
 		self.parent.start_response(response, responseList)
