@@ -3,7 +3,6 @@
 import cgi, os, re
 
 
-
 class YNWeb(object):
 	def __init__(self, environ, start_response, db_user = None, db_password = None, db_name = None, db_host = None):
 		self.environ = environ
@@ -24,13 +23,18 @@ class YNWeb(object):
 			reload(db)
 			self.db = db.MySQL(self.db_user, self.db_password, self.db_name, self.db_host)
 		self.inputFields = {}
+		self.fileObjects = {}
 
 
 		# PROCESS FORM INPUT
 		if self.environ['REQUEST_METHOD'] == 'POST':
-			self.form = cgi.FieldStorage(fp=self.environ['wsgi.input'], environ=self.environ) 
+#			post_env = self.environ.copy()
+#			post_env['QUERY_STRING'] = ''
+#			self.form = cgi.FieldStorage(fp=self.environ['wsgi.input'], environ=post_env, keep_blank_values=True) 
+			self.form = cgi.FieldStorage(fp=self.environ['wsgi.input'], environ=self.environ, keep_blank_values=True)
 		elif self.environ['REQUEST_METHOD'] == 'GET':
 			self.form = cgi.FieldStorage(fp=self.environ['QUERY_STRING'], environ=self.environ) 
+
 
 		##################################################
 		#
@@ -199,8 +203,12 @@ class YNWeb(object):
 			#urllib.unquote(url).decode('utf8')
 
 	def file(self, key):
-		if self.form.has_key(key):
-			return UploadFile(self.form[key].filename, self.form[key].file.read())
+		if self.form[key].file:
+			
+			if not self.fileObjects.has_key(key):
+				self.fileObjects[key] = UploadFile(self.form[key].filename, self.form[key].file.read())
+			
+			return self.fileObjects[key]
 
 	def response(self, content, contentType = 'text/plain', responseCode = '200', header = None):
 		return Response(self, content, contentType, responseCode, header)
@@ -358,6 +366,10 @@ class UploadFile(object):
 			fout = open(path, 'wb')
 			fout.write(self.content)
 			fout.close()
+			
+			return path
+		else:
+			return 'No content'
 		
 
 ######### SECURITY
