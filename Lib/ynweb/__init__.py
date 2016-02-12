@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
 
-import cgi, os, re
+import cgi, os, re, Cookie, datetime, db
 
 
 class YNWeb(object):
 	def __init__(self, environ, start_response, db_user = None, db_password = None, db_name = None, db_host = None):
 		self.environ = environ
 		self.start_response = start_response
-		try:
-			self.session = self.environ['beaker.session']
-		except:
-			self.session = None
-		self.sessionaltered = False
+		self.inputFields = {}
+		self.fileObjects = {}
+		self.transmitHeaders = []
 		
 		self.db = None
 		self.db_user = db_user
@@ -19,11 +17,23 @@ class YNWeb(object):
 		self.db_name = db_name
 		self.db_host = db_host
 		if self.db_user and self.db_password and self.db_name and self.db_host:
-			import db
-			reload(db)
+#			import db
+#			reload(db)
 			self.db = db.MySQL(self.db_user, self.db_password, self.db_name, self.db_host)
-		self.inputFields = {}
-		self.fileObjects = {}
+
+
+		if self.environ and self.start_response:
+			self.attachEnvironStartresponse(environ, start_response)
+	
+	def attachEnvironStartresponse(self, environ, start_response):
+		self.environ = environ
+		self.start_response = start_response
+
+		try:
+			self.session = self.environ['beaker.session']
+		except:
+			self.session = None
+		self.sessionaltered = False
 
 
 		# PROCESS FORM INPUT
@@ -216,6 +226,9 @@ class YNWeb(object):
 	def redirect(self, url):
 		return Response(self, responseCode = '301', header = ('Location', url))
 
+	def fail(self):
+		return Response(self, responseCode = '500')
+
 	def saveSession(self):
 		if self.session:
 			if self.sessionaltered:
@@ -231,6 +244,32 @@ class YNWeb(object):
 		if self.session:
 			self.session[key] = value
 			self.sessionaltered = True
+
+
+	# COOKIES
+	def getCookie(self, key):
+		value = None
+		if self.environ.has_key('HTTP_COOKIE'):
+			cookie = Cookie.SimpleCookie()
+			cookie.load(self.environ['HTTP_COOKIE'])
+			if cookie.has_key(key):
+			 	value = cookie[key].value
+		return value
+
+	def setCookie(self, key, value):
+		cookie = Cookie.SimpleCookie()
+		cookie[key] = value
+		cookie[key]["path"] = "/"
+		expires = datetime.datetime.utcnow() + datetime.timedelta(days=10*365) # expires in 10 years
+		cookie[key]['expires'] = expires.strftime("%a, %d %b %Y %H:%M:%S GMT")
+		self.transmitHeaders.append(('Set-Cookie',cookie[key].OutputString()))
+
+	def deleteCookie(self, key):
+		cookie = Cookie.SimpleCookie()
+		cookie[key] = ''
+		cookie[key]["path"] = "/"
+		cookie[key]['expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
+		self.transmitHeaders.append(('Set-Cookie',cookie[key].OutputString()))
 
 
 	def processInput(self, fields, requiredfields):
@@ -316,6 +355,7 @@ class Response(object):
 		'200': 'OK',
 		'301': 'Redirect',
 		'404': 'Not Found',
+		'500': 'Internal Server Error',
 	}
 	
 	def __init__(self, parent, content = '', contentType = 'text/plain', responseCode = '200', header = None):
@@ -341,7 +381,12 @@ class Response(object):
 	
 		if self.header:
 			responseList.append(self.header)
-		
+
+		if self.parent.transmitHeaders:
+			for header in self.parent.transmitHeaders:
+				responseList.append(header)
+			self.parent.transmitHeaders = []
+			
 		# Send response
 		self.parent.start_response(response, responseList)
 		return self.content
@@ -355,6 +400,10 @@ class UploadFile(object):
 
 	def save(self, folder, filename = None):
 		if self.content:
+			
+			if not os.path.exists(folder):
+				os.makedirs(folder)
+			
 			if filename:
 				if '.' in filename:
 					path = os.path.join(folder, filename)
