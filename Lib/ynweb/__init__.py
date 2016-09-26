@@ -387,6 +387,10 @@ class Response(object):
 				responseList.append(header)
 			self.parent.transmitHeaders = []
 			
+		# Close MySQL connection
+		if self.parent.db:
+			self.parent.db.disconnect()
+
 		# Send response
 		self.parent.start_response(response, responseList)
 		return self.content
@@ -401,8 +405,10 @@ class UploadFile(object):
 	def save(self, folder, filename = None):
 		if self.content:
 			
-			if not os.path.exists(folder):
+			try:
 				os.makedirs(folder)
+			except:
+				pass
 			
 			if filename:
 				if '.' in filename:
