@@ -1,34 +1,16 @@
 # -*- coding: utf-8 -*-
 
-import cgi, os, re, Cookie, datetime, db
+import cgi, os, re, Cookie, datetime
 
 
 class YNWeb(object):
-	def __init__(self, environ, start_response, db_user = None, db_password = None, db_name = None, db_host = None):
+	def __init__(self, environ, start_response):
 		self.environ = environ
 		self.start_response = start_response
 		self.inputFields = {}
 		self.fileObjects = {}
 		self.transmitHeaders = []
 		
-		self.db = None
-		self.db_user = db_user
-		self.db_password = db_password
-		self.db_name = db_name
-		self.db_host = db_host
-		if self.db_user and self.db_password and self.db_name and self.db_host:
-#			import db
-#			reload(db)
-			self.db = db.MySQL(self.db_user, self.db_password, self.db_name, self.db_host)
-
-
-		if self.environ and self.start_response:
-			self.attachEnvironStartresponse(environ, start_response)
-	
-	def attachEnvironStartresponse(self, environ, start_response):
-		self.environ = environ
-		self.start_response = start_response
-
 		try:
 			self.session = self.environ['beaker.session']
 		except:
@@ -176,6 +158,10 @@ class YNWeb(object):
 			return self.smartString(unicode(s), encoding, errors, from_encoding)
 		else:
 			return self.smartString(str(s), encoding, errors, from_encoding)
+
+	def apacheLog(self, what):
+		print >> self.environ['wsgi.errors'], what
+
 		
 	# INPUT
 	def input(self, key):
@@ -215,6 +201,8 @@ class YNWeb(object):
 	def file(self, key):
 		if self.form[key].file:
 			
+#			if self.form[key].filename:
+
 			if not self.fileObjects.has_key(key):
 				self.fileObjects[key] = UploadFile(self.form[key].filename, self.form[key].file.read())
 			
@@ -233,6 +221,7 @@ class YNWeb(object):
 		if self.session:
 			if self.sessionaltered:
 				self.session.save()
+				
 
 	# SESSION
 	def getSession(self, key):
@@ -287,27 +276,6 @@ class YNWeb(object):
 		faulty = []
 		for key in fields.keys():
 			
-#			if fields[key] == str or fields[key] == unicode:
-#				for trigger in triggers:
-#					if trigger in self.input(key).lower() or singleHex(trigger) and (singleHex(trigger) in self.input(key).lower()):
-#						if not key in self.faulty:
-#							self.faulty.append(key)
-#							self.inputOK = False
-
-#			if self.input(key) and fields[key] == str:
-#				try:
-#					_a = str(self.input(key))
-#				except:
-#					self.faulty.append(key)
-#					self.inputOK = False
-
-#			elif self.input(key) and fields[key] == unicode:
-#				try:
-#					_a = unicode(self.input(key))
-#				except:
-#					self.faulty.append(key)
-#					self.inputOK = False
-
 
 			try:
 #				exec('_a = %s(self.input(key))' % (fields[key]))
@@ -315,37 +283,20 @@ class YNWeb(object):
 			except:
 				self.faulty.append(key)
 				self.inputOK = False
-			
-			
-#			if self.input(key) and fields[key] == int:
-#				try:
-#					_a = int(self.input(key))
-#				except:
-#					self.faulty.append(key)
-#					self.inputOK = False
-#
-#			elif self.input(key) and fields[key] == float:
-#				try:
-#					_a = float(self.input(key))
-#				except:
-#					self.faulty.append(key)
-#					self.inputOK = False
 
-		# Process
-#		for key in fields.keys():
-#			if fields[key] == bool:
-#				self.input(key)
 
 
 		# REQUIRED
 		self.requiredmissing = []
 		for key in requiredfields:
 			if key != None:
-				if not self.input(key) or self.input(key) == '--empty--':
+				if not self.input(key) or self.input(key) == '--empty--' or self.input(key) == 'undefined':
 						if not key in self.requiredmissing:
 							self.requiredmissing.append(key)
 							self.inputOK = False
 		
+
+
 		self.inputFields = fields
 
 
@@ -388,8 +339,8 @@ class Response(object):
 			self.parent.transmitHeaders = []
 			
 		# Close MySQL connection
-		if self.parent.db:
-			self.parent.db.disconnect()
+#		if self.parent.db:
+#			self.parent.db.disconnect()
 
 		# Send response
 		self.parent.start_response(response, responseList)
@@ -400,7 +351,8 @@ class UploadFile(object):
 	def __init__(self, filename, content):
 		self.filename = filename
 		self.content = content
-		self.ending = self.filename.lower().split('.')[-1]
+		if self.filename:
+			self.ending = self.filename.lower().split('.')[-1]
 
 	def save(self, folder, filename = None):
 		if self.content:
