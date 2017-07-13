@@ -199,7 +199,7 @@ class YNWeb(object):
 			#urllib.unquote(url).decode('utf8')
 
 	def file(self, key):
-		if self.form[key].file:
+		if self.form.has_key(key) and hasattr(self.form[key], 'file'):
 			
 #			if self.form[key].filename:
 
@@ -353,6 +353,7 @@ class UploadFile(object):
 		self.content = content
 		if self.filename:
 			self.ending = self.filename.lower().split('.')[-1]
+		self.size = len(self.content)
 
 	def save(self, folder, filename = None):
 		if self.content:
