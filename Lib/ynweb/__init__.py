@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import cgi, os, re, Cookie, datetime
+import cgi, os, re, http.cookies, datetime
 
 
 class YNWeb(object):
@@ -49,7 +49,7 @@ class YNWeb(object):
 		self.devicecategory = None
 		self.supportsSVG = False
 
-		if self.environ.has_key('HTTP_USER_AGENT'):
+		if 'HTTP_USER_AGENT' in self.environ:
 
 		
 			# OS / device category
@@ -131,45 +131,19 @@ class YNWeb(object):
 
 		########### END ENVIRONMENT ########### 
 			
-	def encode(self, string):
-#		if isinstance(string, str):
-#			return unicode(string)
-#		elif isinstance(string, unicode):
-#			return string
-#		else:
-#			return unicode(str(string))
-		string = string.encode('utf-8')
-		return string
-	
-	def smartString(self, s, encoding='utf-8', errors='strict', from_encoding='utf-8'):
-		import types
-		if type(s) in (int, long, float, types.NoneType):
-			return str(s)
-		elif type(s) is str:
-			if encoding != from_encoding:
-				return s.decode(from_encoding, errors).encode(encoding, errors)
-			else:
-				return s
-		elif type(s) is unicode:
-			return s.encode(encoding, errors)
-		elif hasattr(s, '__str__'):
-			return self.smartString(str(s), encoding, errors, from_encoding)
-		elif hasattr(s, '__unicode__'):
-			return self.smartString(unicode(s), encoding, errors, from_encoding)
-		else:
-			return self.smartString(str(s), encoding, errors, from_encoding)
+
 
 	def apacheLog(self, what):
-		print >> self.environ['wsgi.errors'], what
+		print(what, file=self.environ['wsgi.errors'])
 
 		
 	# INPUT
 	def input(self, key):
-		import urllib
+		import urllib.request, urllib.parse, urllib.error
 		
-		if hasattr(self, 'form') and self.form.has_key(key):
+		if hasattr(self, 'form') and key in self.form:
 			
-			if self.inputFields.has_key(key):
+			if key in self.inputFields:
 				if self.inputFields[key] == bool:
 					value = self.form.getfirst(key)
 				
@@ -181,29 +155,26 @@ class YNWeb(object):
 				elif self.inputFields[key] == int:
 					return int(self.form.getfirst(key))
 
-				elif self.inputFields[key] == unicode:
-					return self.smartString(urllib.unquote(self.form.getfirst(key).decode('utf8')))
-
 				elif self.inputFields[key] == str:
-					return self.smartString(urllib.unquote(self.form.getfirst(key)))
+					return urllib.parse.unquote(self.form.getfirst(key))
 
 				elif self.inputFields[key] == 'file':
 					return self.form.getfirst(key)
 
 				else:
-					return urllib.unquote(self.form.getfirst(key))
+					return urllib.parse.unquote(self.form.getfirst(key))
 			else:
-				return urllib.unquote(self.form.getfirst(key))
+				return urllib.parse.unquote(self.form.getfirst(key))
 		else:
 			return ''
 			#urllib.unquote(url).decode('utf8')
 
 	def file(self, key):
-		if self.form.has_key(key) and hasattr(self.form[key], 'file'):
+		if key in self.form and hasattr(self.form[key], 'file'):
 			
 #			if self.form[key].filename:
 
-			if not self.fileObjects.has_key(key):
+			if key not in self.fileObjects:
 				self.fileObjects[key] = UploadFile(self.form[key].filename, self.form[key].file.read())
 			
 			return self.fileObjects[key]
@@ -226,7 +197,7 @@ class YNWeb(object):
 	# SESSION
 	def getSession(self, key):
 		if self.session:
-			if self.session.has_key(key):
+			if key in self.session:
 				return self.session[key]
 
 	def setSession(self, key, value):
@@ -238,15 +209,15 @@ class YNWeb(object):
 	# COOKIES
 	def getCookie(self, key):
 		value = None
-		if self.environ.has_key('HTTP_COOKIE'):
-			cookie = Cookie.SimpleCookie()
+		if 'HTTP_COOKIE' in self.environ:
+			cookie = http.cookies.SimpleCookie()
 			cookie.load(self.environ['HTTP_COOKIE'])
-			if cookie.has_key(key):
+			if key in cookie:
 			 	value = cookie[key].value
 		return value
 
 	def setCookie(self, key, value):
-		cookie = Cookie.SimpleCookie()
+		cookie = http.cookies.SimpleCookie()
 		cookie[key] = value
 		cookie[key]["path"] = "/"
 		expires = datetime.datetime.utcnow() + datetime.timedelta(days=10*365) # expires in 10 years
@@ -254,7 +225,7 @@ class YNWeb(object):
 		self.transmitHeaders.append(('Set-Cookie',cookie[key].OutputString()))
 
 	def deleteCookie(self, key):
-		cookie = Cookie.SimpleCookie()
+		cookie = http.cookies.SimpleCookie()
 		cookie[key] = ''
 		cookie[key]["path"] = "/"
 		cookie[key]['expires'] = 'Thu, 01 Jan 1970 00:00:00 GMT'
@@ -274,7 +245,7 @@ class YNWeb(object):
 				return ''
 
 		faulty = []
-		for key in fields.keys():
+		for key in list(fields.keys()):
 			
 
 			try:
@@ -290,7 +261,7 @@ class YNWeb(object):
 		self.requiredmissing = []
 		for key in requiredfields:
 			if key != None:
-				if not self.input(key) or self.input(key) == '--empty--' or self.input(key) == 'undefined':
+				if not self.input(key) or self.input(key) == '__empty__' or self.input(key) == 'undefined':
 						if not key in self.requiredmissing:
 							self.requiredmissing.append(key)
 							self.inputOK = False
@@ -312,23 +283,36 @@ class Response(object):
 	def __init__(self, parent, content = '', contentType = 'text/plain', responseCode = '200', header = None):
 		self.parent = parent
 		self.responseCode = str(responseCode)
-		self.content = self.parent.smartString(content)
+		self.content = content
 		self.contentType = contentType
 		self.header = header
 
 	def respond(self):
 		
+#		content = bytes(self.content, 'utf-8')
+#		content = self.content
+
+#		self.parent.apacheLog(str(type(self.content)))
+
+		try:
+			content = str.encode(self.content)
+		except:
+			content = bytes(self.content)
+
+		self.parent.apacheLog(str(type(content)))
+		# self.parent.apacheLog(self.content)
+
 		self.parent.saveSession()
 
 		responseList = []
 		if self.content:
 			responseList.append(('Content-type', self.contentType))
-			responseList.append(('Content-Length', str(len(self.content))))
+			responseList.append(('Content-Length', str(len(content))))
 
 		if self.responseCode in self.responses:
 			response = "%s %s" % (self.responseCode, self.responses[self.responseCode])
 		else:
-			response = str(self.responseCode)
+			response = self.responseCode
 	
 		if self.header:
 			responseList.append(self.header)
@@ -344,7 +328,7 @@ class Response(object):
 
 		# Send response
 		self.parent.start_response(response, responseList)
-		return self.content
+		return [content]
 
 
 class UploadFile(object):
@@ -383,7 +367,7 @@ class UploadFile(object):
 ######### SECURITY
 
 def makeHash(string):
-	u'''\
+	'''\
 	Create hex hash string with SHA512.
 	'''
 	import hashlib
